@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { KnownLivyStatementStates, KnownLivyStates, SparkClient, SparkSession, SparkSessionOptions, SparkStatement, SparkStatementOptions, SparkStatementOutput } from "@azure/synapse-spark";
 import { getConfig } from "./ConfigManager";
 import { getCredentials } from "./SynapseUtils";
+import { executeMagicCommand } from './MagicCommands';
 
 const getEndpoint = () => {
     return `https://${getConfig("workspaceName")}.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/${getConfig("cluster")}`;
@@ -10,8 +11,15 @@ const getEndpoint = () => {
 
 let _sparkClient: SparkClient | undefined = undefined;
 export const getSparkClient = (): SparkClient => {
+    const workspaceName = getConfig("workspaceName");
+    const cluster = getConfig("cluster");
+
+    if (!_sparkClient && workspaceName && cluster) {
+        _sparkClient = new SparkClient(getCredentials(), `https://${workspaceName}.dev.azuresynapse.net`, cluster || "");
+    }
+
     if (!_sparkClient) {
-        _sparkClient = new SparkClient(getCredentials(), `https://${getConfig("workspaceName")}.dev.azuresynapse.net`, getConfig("cluster") || "");
+        throw new Error("Unable to create spark client");
     }
 
     return _sparkClient;
@@ -48,27 +56,29 @@ export const getSparkSession = async (): Promise<SparkSession | undefined> => {
 };
 
 export const submitCodeCell = async (
-    cell: vscode.NotebookCell,
-    execution: vscode.NotebookCellExecution): Promise<SparkStatementOutput> => {
+    code: string,
+    execution: vscode.NotebookCellExecution): Promise<SparkStatementOutput | undefined> => {
 
+    const sparkStatementOptions: SparkStatementOptions = {
+        code: code,
+        kind: 'spark',
+    };
     const sparkClient = getSparkClient();
     const sparkSession = await getSparkSession();
     let sparkStatement: SparkStatement | undefined = undefined;
 
     if (sparkSession !== undefined) {
-        const sparkStatementOptions: SparkStatementOptions = {
-            code: cell.document.getText(),
-            kind: 'spark',
-        };
-
-        sparkStatement = await sparkClient
-            .sparkSessionOperations?.createSparkStatement(sparkSession.id, sparkStatementOptions);
-
-        execution.replaceOutput(new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.stdout(sparkStatement.state || 'unknown')]));
+        if (code.startsWith("%")) {
+            return await executeMagicCommand(code, execution);
+        }
+        else {
+            sparkStatement = await sparkClient.sparkSessionOperations?.createSparkStatement(sparkSession.id, sparkStatementOptions);
+            execution.replaceOutput(new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.stdout(sparkStatement.state || 'unknown')]));
+        }
     }
 
     return new Promise(async (resolve, reject) => {
-        if (sparkClient === undefined || sparkSession === undefined || sparkStatement === undefined) {
+        if (!sparkClient || !sparkSession || !sparkStatement) {
             reject();
             return;
         }
@@ -89,7 +99,7 @@ export const submitCodeCell = async (
                 case KnownLivyStatementStates.Cancelling:
                     setTimeout(() => {
                         checkStatementUpdate();
-                    }, 1);
+                    }, .1);
                     break;
                 case KnownLivyStatementStates.Available:
                     if (sparkStatementUpdate && sparkStatementUpdate.output) {

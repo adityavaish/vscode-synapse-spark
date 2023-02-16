@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+
+import { SparkStatementOutput } from '@azure/synapse-spark';
 import { submitCodeCell } from './NotebookExecutor';
 
 export class SynapseNotebookController {
@@ -36,9 +38,9 @@ export class SynapseNotebookController {
         execution.start(Date.now());
 
         try {
-            const sparkStatementOutput = await submitCodeCell(cell, execution);
+            const sparkStatementOutput = await submitCodeCell(cell.document.getText(), execution);
 
-            if (sparkStatementOutput.status !== 'error') {
+            if (sparkStatementOutput && sparkStatementOutput.status !== 'error') {
                 const outputs: vscode.NotebookCellOutputItem[] = [];
                 for (let key in sparkStatementOutput.data) {
                     outputs.push(vscode.NotebookCellOutputItem.text(<string>sparkStatementOutput.data[key], key));
@@ -47,8 +49,11 @@ export class SynapseNotebookController {
                 execution.replaceOutput(new vscode.NotebookCellOutput(outputs));
                 execution.end(true, Date.now());
             }
-            else {
+            else if (sparkStatementOutput) {
                 throw new Error(sparkStatementOutput.errorValue);
+            }
+            else {
+                throw new Error("Statement output is undefined");
             }
         }
         catch (ex: any) {
