@@ -47,30 +47,10 @@
           "default": "",
           "description": "Selected Azure Subscription"
         },
-        "synapse-spark-extension.workspace": {
-          "type": "string",
-          "default": "",
-          "description": "Selected Synapse Workspace"
-        },
         "synapse-spark-extension.resourceGroupName": {
           "type": "string",
           "default": "",
           "description": "Resource Group of Synapse Workspace"
-        },
-        "synapse-spark-extension.adlsTempAccount": {
-          "type": "string",
-          "default": "",
-          "description": "Temporary storage account to upload files"
-        },
-        "synapse-spark-extension.adlsTempContainer": {
-          "type": "string",
-          "default": "",
-          "description": "Temporary storage account container to upload files"
-        },
-        "synapse-spark-extension.adlsTempPath": {
-          "type": "string",
-          "default": "",
-          "description": "Temporary storage account path to upload files"
         },
         "synapse-spark-extension.workspaceName": {
           "type": "string",
@@ -90,7 +70,7 @@
         "displayName": "Synapse notebook",
         "selector": [
           {
-            "filenamePattern": "*-scala.json"
+            "filenamePattern": "*.json"
           }
         ]
       }

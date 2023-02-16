@@ -32,6 +32,7 @@ const sparkSessionOperations: SparkSessionOptions = {
     executorCount: 2,
     driverMemory: "224g",
     executorMemory: "224g",
+    
 };
 
 let _sparkSession: SparkSession | undefined = undefined;

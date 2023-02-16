@@ -1,6 +1,6 @@
 # synapse-spark README
 
-This is the README for your extension "synapse-spark". After writing up a brief description, we recommend including the following sections.
+Synapse spark notebook render and execute tools.
 
 ## Features
 
