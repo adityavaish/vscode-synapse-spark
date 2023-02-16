@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 import { TextDecoder, TextEncoder } from 'util';
-import { SynCellMetadata, SynNotebook, SynNotebookCell } from './SynapseNotebookTypes';
+import { SynCellMetadata, SynNotebook, SynNotebookCell } from './SynapseTypes';
 
 export class SynapseNotebookSerializer implements vscode.NotebookSerializer {
 	private synapseNotebook?: SynNotebook;
@@ -43,14 +43,14 @@ export class SynapseNotebookSerializer implements vscode.NotebookSerializer {
 		};
 	}
 
-	serializeNotebook(data: vscode.NotebookData, _token: vscode.CancellationToken): Uint8Array | Thenable<Uint8Array> {
+	serializeNotebook(data: vscode.NotebookData, _token?: vscode.CancellationToken): Uint8Array | Thenable<Uint8Array> {
 		let notebookData: SynNotebook = <SynNotebook> data.metadata;
 		notebookData.properties.cells = data.cells.map(x => this.toSynapseNotebookCell(x));
 
 		return new TextEncoder().encode(JSON.stringify(notebookData, null, 4));
 	}
 
-	deserializeNotebook(content: Uint8Array, _token: vscode.CancellationToken): vscode.NotebookData {
+	deserializeNotebook(content: Uint8Array, _token?: vscode.CancellationToken): vscode.NotebookData {
 		var contents = new TextDecoder().decode(content);
 
 		try {

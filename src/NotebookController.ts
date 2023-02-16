@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { submitCodeCell } from './SynapseNotebookExecutor';
+import { submitCodeCell } from './NotebookExecutor';
 
 export class SynapseNotebookController {
     readonly label = 'Synapse kernel';

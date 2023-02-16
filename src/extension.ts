@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { EXT_CONFIG_ID, showPoolsSelection, showSubscriptionsSelection, showSynapseWorkspaceSelection } from './ConfigManager';
-import { SynapseNotebookController } from './SynapseNotebookController';
-import { SynapseNotebookSerializer } from './SynapseNotebookSerializer';
+import { SynapseNotebookController } from './NotebookController';
+import { SynapseNotebookSerializer } from './NotebookSerializer';
 
 const registerCommand = (context: vscode.ExtensionContext, name: string, callback: () => Promise<any>) => {
 	context.subscriptions.push(
