@@ -4,10 +4,7 @@ import { KnownLivyStatementStates, KnownLivyStates, SparkClient, SparkSession, S
 import { getConfig } from "./ConfigManager";
 import { getCredentials } from "./SynapseUtils";
 import { executeMagicCommand } from './MagicCommands';
-
-const getEndpoint = () => {
-    return `https://${getConfig("workspaceName")}.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/${getConfig("cluster")}`;
-};
+import { SynapseNotebookController } from './NotebookController';
 
 let _sparkClient: SparkClient | undefined = undefined;
 export const getSparkClient = (): SparkClient => {
@@ -26,13 +23,12 @@ export const getSparkClient = (): SparkClient => {
 };
 
 const sparkSessionOperations: SparkSessionOptions = {
-    name: "vscode-spark-extension-session" + Date.now().toString(),
+    name: "vscode-spark-extension-session-" + Date.now().toString(),
     driverCores: 32,
     executorCores: 32,
     executorCount: 2,
     driverMemory: "224g",
     executorMemory: "224g",
-    
 };
 
 let _sparkSession: SparkSession | undefined = undefined;
@@ -58,7 +54,8 @@ export const getSparkSession = async (): Promise<SparkSession | undefined> => {
 
 export const submitCodeCell = async (
     code: string,
-    execution: vscode.NotebookCellExecution): Promise<SparkStatementOutput | undefined> => {
+    notebookController: SynapseNotebookController,
+    magicCellRunning: boolean = false): Promise<SparkStatementOutput | undefined> => {
 
     const sparkStatementOptions: SparkStatementOptions = {
         code: code,
@@ -70,11 +67,11 @@ export const submitCodeCell = async (
 
     if (sparkSession !== undefined) {
         if (code.startsWith("%")) {
-            return await executeMagicCommand(code, execution);
+            return await executeMagicCommand(code, notebookController);
         }
         else {
             sparkStatement = await sparkClient.sparkSessionOperations?.createSparkStatement(sparkSession.id, sparkStatementOptions);
-            execution.replaceOutput(new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.stdout(sparkStatement.state || 'unknown')]));
+            notebookController.updateCellOutput(sparkStatement.state);
         }
     }
 
@@ -87,7 +84,7 @@ export const submitCodeCell = async (
         const sparkStatementId = sparkStatement.id;
 
         const checkStatementUpdate = async () => {
-            if (execution.token.isCancellationRequested) {
+            if (notebookController.execution?.token.isCancellationRequested) {
                 reject();
             }
             
