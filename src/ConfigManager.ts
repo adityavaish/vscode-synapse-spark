@@ -6,43 +6,15 @@ import { StorageManagementClient } from '@azure/arm-storage';
 import { DataLakeServiceClient } from '@azure/storage-file-datalake';
 import { SubscriptionClient } from '@azure/arm-subscriptions';
 
-const EXT_CONFIG_ID = "synapse-spark";
-
-// export const showConfigureAll = async () => {
-//     let subscriptionId: string | undefined = undefined;
-//     let adlsTempAccount: string | undefined = undefined;
-//     let adlsTempContainer: string | undefined = undefined;
-
-//     subscriptionId = await showSubscriptionsSelection();
-
-//     if(!!subscriptionId) {
-//         await showSynapseWorkspaceSelection(subscriptionId);
-//     }
-
-//     if(!!subscriptionId) {
-//         adlsTempAccount = await showAdlsAccountSelection(subscriptionId);
-//     }
-
-//     if(!!adlsTempAccount) {
-//         adlsTempContainer = await showAdlsContainerSelection(adlsTempAccount);
-//     }
-
-//     if(!!adlsTempContainer) {
-//         await showAdlsPathInput(adlsTempContainer);
-//     }
-// };
+export const EXT_CONFIG_ID = "synapse-spark-extension";
 
 export const showPoolsSelection = async (): Promise<string> => {
-    const subscriptionId = getConfig("subcriptionId") || await showSubscriptionsSelection();
+    const subscriptionId = getConfig("subscriptionId") || await showSubscriptionsSelection();
     let workspaceName = getConfig("workspaceName");
     let resourceGroupName = getConfig("resourceGroupName");
 
-    if (!!workspaceName || !!resourceGroupName) {
-        [workspaceName, resourceGroupName] = await showSynapseWorkspaceSelection();
-    }
-
     if (!workspaceName || !resourceGroupName) {
-        return "";
+        [workspaceName, resourceGroupName] = await showSynapseWorkspaceSelection();
     }
     
     const client = new SynapseManagementClient(getCredentials(), subscriptionId);
@@ -104,13 +76,13 @@ export const showSubscriptionsSelection = async (): Promise<string> => {
                 return "";
             }
 
-            await updateConfig("subcriptionId", selection.description!);
+            await updateConfig("subscriptionId", selection.description!);
             return !!selection.description ? selection.description : "";
         });
 };
 
 export const showSynapseWorkspaceSelection = async (): Promise<[string, string]> => {
-    const subscriptionId = getConfig("subcriptionId") || await showSubscriptionsSelection();
+    const subscriptionId = getConfig("subscriptionId") || await showSubscriptionsSelection();
     const synapseClient = new SynapseManagementClient(getCredentials(), subscriptionId);
     const workspaces = [];
 
@@ -232,7 +204,13 @@ export const showAdlsPathInput = async (container: string): Promise<string | und
 
 export const getConfig = (property: string): string | undefined => {
     const config = vscode.workspace.getConfiguration(EXT_CONFIG_ID);
-    return config.get(property, undefined);
+    const val = config.get(property, undefined);
+    if (val === '') {
+        return undefined;
+    }
+    else {
+        return val;
+    }
 };
 
 export const updateConfig = async (property: string, value: string) => {

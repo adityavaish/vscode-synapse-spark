@@ -1,22 +1,26 @@
 import * as vscode from 'vscode';
-import { showPoolsSelection, showSubscriptionsSelection, showSynapseWorkspaceSelection } from './ConfigManager';
+import { EXT_CONFIG_ID, showPoolsSelection, showSubscriptionsSelection, showSynapseWorkspaceSelection } from './ConfigManager';
+import { SynapseNotebookController } from './SynapseNotebookController';
+import { SynapseNotebookSerializer } from './SynapseNotebookSerializer';
 
 const registerCommand = (context: vscode.ExtensionContext, name: string, callback: () => Promise<any>) => {
 	context.subscriptions.push(
-		vscode.commands.registerCommand(name, async () => { await callback(); })
+		vscode.commands.registerCommand(`${EXT_CONFIG_ID}.${name}`, async () => { await callback(); })
 	);
 };
 
 export function activate(context: vscode.ExtensionContext) {
-	console.log('Starting extension synapse-spark!');
+	console.log('Starting extension synapse-spark-extension!');
 
-	// let disposable = vscode.commands.registerCommand('synapse-spark.helloWorld', () => {
-	// 	vscode.window.showInformationMessage('Hello World from synapse-spark!');
-	// });
+	registerCommand(context, "configureAzureSubscription", showSubscriptionsSelection);
+	registerCommand(context, "configureSynapseWorkspace", showSynapseWorkspaceSelection);
+	registerCommand(context, "selectPool", showPoolsSelection);
 
-	registerCommand(context, "synapse-spark.configureAzureSubscription", showSubscriptionsSelection);
-	registerCommand(context, "synapse-spark.configureSynapseWorkspace", showSynapseWorkspaceSelection);
-	registerCommand(context, "synapse-spark.selectPool", showPoolsSelection);
+	const synapseNotebookSerializer = vscode.workspace.registerNotebookSerializer(EXT_CONFIG_ID, new SynapseNotebookSerializer());
+	context.subscriptions.push(synapseNotebookSerializer);
+
+	const synapseNotebookController = new SynapseNotebookController(EXT_CONFIG_ID);
+	context.subscriptions.push(synapseNotebookController);
 }
 
 // This method is called when your extension is deactivated
