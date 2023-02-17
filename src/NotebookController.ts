@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 import { submitCodeCell } from './NotebookExecutor';
-import { NotebookStatusProvicer } from './StatusProvier';
+import { NotebookStatusProvicer } from './NotebookStatusProvider';
 
 export class SynapseNotebookController {
     readonly label = 'Synapse kernel';
@@ -9,7 +9,8 @@ export class SynapseNotebookController {
 
     private readonly controller: vscode.NotebookController;
     private _executionOrder = 0;
-    
+    private statusProvider: NotebookStatusProvicer;
+
     execution: vscode.NotebookCellExecution | undefined = undefined;
 
     constructor(notebookType: string) {
@@ -19,21 +20,13 @@ export class SynapseNotebookController {
             this.label
         );
 
-        vscode.notebooks.registerNotebookCellStatusBarItemProvider(notebookType, new NotebookStatusProvicer(this));
+        this.statusProvider = new NotebookStatusProvicer(this);
+        vscode.notebooks.registerNotebookCellStatusBarItemProvider(notebookType, this.statusProvider);
 
         this.controller.supportedLanguages = this.supportedLanguages;
         this.controller.supportsExecutionOrder = true;
         this.controller.executeHandler = this.execute;
-        this.controller.interruptHandler = this.interruptHandler;
     }
-
-    private interruptHandler = (_notebook: vscode.NotebookDocument) => {
-        console.log("interruptHandler");
-
-        this.execution?.replaceOutput(new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.stderr("user cancelled")]));
-        this.execution?.end(false, Date.now());
-        this.execution = undefined;
-    };
 
     private execute = async (
         cells: vscode.NotebookCell[],
@@ -47,29 +40,19 @@ export class SynapseNotebookController {
 
     private async doExecution(cell: vscode.NotebookCell): Promise<void> {
         if (this.execution) {
-            const cellExecution = this.controller.createNotebookCellExecution(cell);
-            cellExecution?.replaceOutput(new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.stderr("another cell already running")]));
-            cellExecution?.end(false, Date.now());
+            this.controller.createNotebookCellExecution(cell)?.end(false, Date.now());
+
             return;
         }
 
-        this.execution = this.controller.createNotebookCellExecution(cell);
-        this.execution.executionOrder = ++this._executionOrder;
-        this.execution.start(Date.now());
+        await this.startExecution(cell);
 
         try {
             const sparkStatementOutput = await submitCodeCell(cell.document.getText(), this);
 
             if (sparkStatementOutput && sparkStatementOutput.status !== 'error') {
-                // const outputs: vscode.NotebookCellOutputItem[] = [];
-                // for (let key in sparkStatementOutput.data) {
-                //     outputs.push(vscode.NotebookCellOutputItem.text(<string>sparkStatementOutput.data[key], key));
-                // }
-
-                // this.execution?.replaceOutput(new vscode.NotebookCellOutput(outputs));
-                this.updateCellOutput(undefined, sparkStatementOutput.data);
-
-                this.execution?.end(true, Date.now());
+                this.updateCellOutput(sparkStatementOutput.data);
+                await this.endExecution(true, "success");
             }
             else if (sparkStatementOutput) {
                 throw new Error(sparkStatementOutput.errorValue);
@@ -79,45 +62,63 @@ export class SynapseNotebookController {
             }
         }
         catch (ex: any) {
-            this.updateCellOutput(ex || "unknown error");
-            // this.execution.replaceOutput(new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.stderr(ex || "unknown error")]));
-            this.execution.end(false, Date.now());
+            this.appendCellOutput(ex);
+            await this.endExecution(false, "error");
             this.execution = undefined;
         }
 
         this.execution = undefined;
     }
 
-    updateCellOutput = (message?: string, data?: Record<string, unknown>, cellExecution?: vscode.NotebookCellExecution) => {
+    updateCellOutput = (data?: Record<string, unknown>, cellExecution?: vscode.NotebookCellExecution) => {
         const execution = cellExecution || this.execution;
-
-        if (!execution) {
-            return;
-        }
-
-        const messages: vscode.NotebookCellOutputItem[] = [];
-        
-        message && messages.push(vscode.NotebookCellOutputItem.stdout(message));
-        execution.replaceOutput(new vscode.NotebookCellOutput(messages));
+        if (!execution) { return; }
 
         for (let key in data) {
-            this.appendCellOutput(execution, <string>data[key], key);
+            this.appendCellOutput(<string>data[key], key, execution);
         }
     };
 
-    appendCellOutput = (cellExecution: vscode.NotebookCellExecution, message: string, mime?: string) => {
-        if (!cellExecution) {
-            return;
-        }
-        cellExecution.appendOutput(new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.text(message, mime)]));
+    appendCellOutput = (message: string, mime?: string, cellExecution?: vscode.NotebookCellExecution) => {
+        const execution = cellExecution || this.execution;
+        if (!execution) { return; }
+
+        execution.appendOutput(new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.text(message, mime)]));
     };
 
-    // updateStatus = (cellExecution: vscode.NotebookCellExecution, message: string) => {
-    //     if (!cellExecution) {
-    //         return;
-    //     }
-    //     cellExecution.appendOutput(new vscode.NotebookCellOutput([new vscode.NotebookCellStatusBarItem(message)]));
-    // };
+    updateCellStatus = (message: string, cellExecution?: vscode.NotebookCellExecution) => {
+        const execution = cellExecution || this.execution;
+        if (!execution) { return; }
+
+        this.statusProvider.updateStatus(message, execution.cell);
+    };
+
+    isCanceled: boolean = false;
+
+    startExecution = async (cell: vscode.NotebookCell) => {
+        if (!this.execution) {
+            this.isCanceled = false;
+            this.execution = this.controller.createNotebookCellExecution(cell);
+            this.execution.executionOrder = ++ this._executionOrder;
+            this.execution.token.onCancellationRequested(async () => {
+                await this.endExecution(false, "", true);
+            });
+
+            this.updateCellStatus("starting");
+            this.execution.start(Date.now());
+
+            await this.execution.clearOutput();
+        }
+    };
+
+    endExecution = async (success: boolean, status: string = "", isCanceled: boolean = false) => {
+        if (this.execution) {
+            this.updateCellStatus(isCanceled ? "canceled" : status);
+            this.isCanceled = isCanceled;
+            this.execution.end(success, Date.now());
+            this.execution = undefined;
+        }
+    };
 
     dispose(): void { }
 }

@@ -54,8 +54,7 @@ export const getSparkSession = async (): Promise<SparkSession | undefined> => {
 
 export const submitCodeCell = async (
     code: string,
-    notebookController: SynapseNotebookController,
-    magicCellRunning: boolean = false): Promise<SparkStatementOutput | undefined> => {
+    notebookController: SynapseNotebookController): Promise<SparkStatementOutput | undefined> => {
 
     const sparkStatementOptions: SparkStatementOptions = {
         code: code,
@@ -71,7 +70,9 @@ export const submitCodeCell = async (
         }
         else {
             sparkStatement = await sparkClient.sparkSessionOperations?.createSparkStatement(sparkSession.id, sparkStatementOptions);
-            notebookController.updateCellOutput(sparkStatement.state);
+            if (sparkStatement && sparkStatement.state) {
+                notebookController.updateCellStatus(sparkStatement.state);
+            }
         }
     }
 
@@ -84,7 +85,7 @@ export const submitCodeCell = async (
         const sparkStatementId = sparkStatement.id;
 
         const checkStatementUpdate = async () => {
-            if (notebookController.execution?.token.isCancellationRequested) {
+            if (notebookController.isCanceled) {
                 reject();
             }
             

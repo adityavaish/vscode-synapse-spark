@@ -21,13 +21,7 @@ export const executeMagicCommand = async (command: string, notebookController: S
 
             for (let cell of notebookData.cells) {
                 sparkStatementOutput = await submitCodeCell(cell.value, notebookController);
-
-                // const outputs: vscode.NotebookCellOutputItem[] = [];
-                // for (let key in sparkStatementOutput?.data) {
-                //     outputs.push(vscode.NotebookCellOutputItem.text(<string>sparkStatementOutput?.data[key], key));
-                // }
-
-                notebookController.updateCellOutput(undefined, sparkStatementOutput?.data);
+                notebookController.updateCellOutput(sparkStatementOutput?.data);
             }
 
             return sparkStatementOutput;
